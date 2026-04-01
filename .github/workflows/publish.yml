@@ -1,0 +1,22 @@
+name: Publish
+on:
+  schedule:
+    - cron: "0 10 * * 1,3,5"
+  workflow_dispatch:
+    inputs:
+      channel_id:
+        description: "Channel ID (default: github-trending)"
+        required: false
+        type: string
+
+jobs:
+  publish:
+    uses: aa-0921/youtube-auto-engine/.github/workflows/reusable-publish.yml@main
+    with:
+      channel_id: ${{ inputs.channel_id || 'github-trending' }}
+    secrets:
+      ENGINE_DEPLOY_KEY: ${{ secrets.ENGINE_DEPLOY_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+      YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+      YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
