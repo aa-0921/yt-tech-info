@@ -11,13 +11,51 @@ on:
 
 jobs:
   publish:
-    uses: aa-0921/youtube-auto-engine/.github/workflows/reusable-publish.yml@main
-    with:
-      channel_id: ${{ inputs.channel_id || 'github-trending' }}
-    secrets:
-      ENGINE_REPO_TOKEN: ${{ secrets.ENGINE_REPO_TOKEN }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-      YT_GITHUB_TRENDING_CLIENT_ID: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_ID }}
-      YT_GITHUB_TRENDING_CLIENT_SECRET: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_SECRET }}
-      YT_GITHUB_TRENDING_REFRESH_TOKEN: ${{ secrets.YT_GITHUB_TRENDING_REFRESH_TOKEN }}
-      PIXAZO_API_KEY: ${{ secrets.PIXAZO_API_KEY }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout engine (private)
+        uses: actions/checkout@v4
+        with:
+          repository: aa-0921/youtube-auto-engine
+          token: ${{ secrets.ENGINE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-noto-cjk
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          cd remotion && npm ci
+
+      - name: Run pipeline
+        env:
+          CHANNEL_ID: ${{ inputs.channel_id || 'github-trending' }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          YT_GITHUB_TRENDING_CLIENT_ID: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_ID }}
+          YT_GITHUB_TRENDING_CLIENT_SECRET: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_SECRET }}
+          YT_GITHUB_TRENDING_REFRESH_TOKEN: ${{ secrets.YT_GITHUB_TRENDING_REFRESH_TOKEN }}
+          PIXAZO_API_KEY: ${{ secrets.PIXAZO_API_KEY }}
+        run: python cli.py run "$CHANNEL_ID"
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-${{ inputs.channel_id || 'github-trending' }}-${{ github.run_id }}
+          path: /tmp/yt-auto-*
+          retention-days: 3
+          if-no-files-found: ignore
