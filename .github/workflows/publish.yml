@@ -13,6 +13,11 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    services:
+      voicevox:
+        image: voicevox/voicevox_engine:cpu-0.25.1
+        ports:
+          - 50021:50021
     steps:
       - name: Checkout engine (private)
         uses: actions/checkout@v4
