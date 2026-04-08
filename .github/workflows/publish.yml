@@ -47,6 +47,9 @@ jobs:
           playwright install chromium
           cd remotion && npm ci
 
+      - name: Generate SFX assets
+        run: python scripts/download_sfx.py
+
       - name: Run pipeline
         env:
           CHANNEL_ID: ${{ inputs.channel_id || 'github-trending' }}
