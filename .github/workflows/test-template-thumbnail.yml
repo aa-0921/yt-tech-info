@@ -1,0 +1,52 @@
+name: Test Template Thumbnail
+on:
+  workflow_dispatch:
+    inputs:
+      engine_ref:
+        description: "youtube-auto-engine branch/SHA"
+        required: false
+        default: "feat/template-thumbnail"
+        type: string
+
+jobs:
+  test-template-thumbnail:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout engine (private)
+        uses: actions/checkout@v4
+        with:
+          repository: aa-0921/youtube-auto-engine
+          ref: ${{ inputs.engine_ref }}
+          token: ${{ secrets.ENGINE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fonts-noto-cjk
+
+      - name: Install dependencies
+        run: |
+          pip install playwright Pillow
+          playwright install-deps chromium
+          playwright install chromium
+
+      - name: Generate template thumbnails
+        run: |
+          python scripts/test_thumbnails.py             --output-dir artifacts/template             --template channels/github-trending/templates/thumb_template_duo.png
+
+      - name: Generate conventional thumbnails (comparison)
+        run: |
+          python scripts/test_thumbnails.py             --output-dir artifacts/conventional             --styles 0,4
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-thumbnail-test-${{ github.run_id }}
+          path: artifacts/
+          retention-days: 7
