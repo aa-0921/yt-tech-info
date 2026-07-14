@@ -1,0 +1,46 @@
+name: Track Analytics
+
+# github-trending の KPI を週次でスナップショットし、
+# youtube-auto-engine(private) の analytics_timeseries.jsonl へ追記する。
+# 施策(タイトル多様化・冒頭フック)の効果を手動確認せず時系列で追える。
+on:
+  schedule:
+    - cron: "23 11 * * 1"   # 毎週月曜 11:23 UTC (publish 10:07 とずらす / :00・:30 回避)
+  workflow_dispatch:
+
+jobs:
+  track:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout engine (private)
+        uses: actions/checkout@v4
+        with:
+          repository: aa-0921/youtube-auto-engine
+          token: ${{ secrets.ENGINE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Capture analytics snapshot
+        env:
+          YT_GITHUB_TRENDING_CLIENT_ID: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_ID }}
+          YT_GITHUB_TRENDING_CLIENT_SECRET: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_SECRET }}
+          YT_GITHUB_TRENDING_REFRESH_TOKEN: ${{ secrets.YT_GITHUB_TRENDING_REFRESH_TOKEN }}
+        run: >
+          python scripts/analyze_channel.py
+          --days 28 --no-suggest --no-ypp
+          --append-timeseries channels/github-trending/analytics_timeseries.jsonl
+
+      - name: Persist timeseries
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add channels/github-trending/analytics_timeseries.jsonl
+          # 他ファイルが modified になっても pull --rebase が失敗しないよう autostash
+          git diff --staged --quiet || (git commit -m "chore: append analytics snapshot" && git pull --rebase --autostash && git push)
