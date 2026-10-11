@@ -1,0 +1,89 @@
+name: Publish it-shikaku
+on:
+  # 台本が 1 本しかないため cron は無効（有効にすると同じ動画を再投稿する）。台本が溜まったら戻す
+  # schedule:
+  #   - cron: "0 12 * * *"  # 21:00 JST
+  workflow_dispatch:
+    inputs:
+      privacy_status:
+        description: "YouTube の公開設定"
+        required: false
+        default: "unlisted"
+        type: choice
+        options: [unlisted, private, public]
+      script:
+        description: "台本パス（channels/it-shikaku/ からの相対。空なら既定の台本）"
+        required: false
+        type: string
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      voicevox:
+        image: voicevox/voicevox_engine:cpu-0.25.1
+        ports:
+          - 50021:50021
+    steps:
+      - name: Checkout engine (private)
+        uses: actions/checkout@v4
+        with:
+          repository: aa-0921/youtube-auto-engine
+          token: ${{ secrets.ENGINE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fonts-noto-cjk
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install-deps chromium
+          playwright install chromium
+          cd remotion && npm ci
+
+      - name: Generate SFX assets
+        run: python scripts/download_sfx.py
+
+      - name: Run pipeline
+        env:
+          YT_IT_SHIKAKU_CLIENT_ID: ${{ secrets.YT_IT_SHIKAKU_CLIENT_ID }}
+          YT_IT_SHIKAKU_CLIENT_SECRET: ${{ secrets.YT_IT_SHIKAKU_CLIENT_SECRET }}
+          YT_IT_SHIKAKU_REFRESH_TOKEN: ${{ secrets.YT_IT_SHIKAKU_REFRESH_TOKEN }}
+          # schedule 起動時は inputs が空なので unlisted に倒す
+          YT_PRIVACY_STATUS: ${{ inputs.privacy_status || 'unlisted' }}
+          IT_SHIKAKU_SCRIPT: ${{ inputs.script }}
+        run: python cli.py run it-shikaku
+
+      - name: Persist history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # 手書き台本チャンネルは history ファイルが無い場合があるので存在するものだけ add する
+          for f in channels/it-shikaku/history.json channels/it-shikaku/variation_history.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          # cli.py 実行中に他のファイルが modified 状態になることがあるため
+          # --autostash で git pull --rebase が unstaged 変更で失敗しないようにする
+          git diff --staged --quiet || (git commit -m "chore: update it-shikaku history" && git pull --rebase --autostash && git push)
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-it-shikaku-${{ github.run_id }}
+          path: /tmp/yt-auto-*
+          retention-days: 3
+          if-no-files-found: ignore
