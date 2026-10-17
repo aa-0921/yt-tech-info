@@ -1,8 +1,8 @@
 name: Publish it-shikaku
 on:
-  # 台本が 1 本しかないため cron は無効（有効にすると同じ動画を再投稿する）。台本が溜まったら戻す
-  # schedule:
-  #   - cron: "0 12 * * *"  # 21:00 JST
+  # 毎日 drafts/ の未投稿台本を 1 本投稿する。尽きたら script_loader が StepError で失敗させる
+  schedule:
+    - cron: "0 12 * * *"  # 21:00 JST
   workflow_dispatch:
     inputs:
       privacy_status:
@@ -12,7 +12,7 @@ on:
         type: choice
         options: [unlisted, private, public]
       script:
-        description: "台本パス（channels/it-shikaku/ からの相対。空なら既定の台本）"
+        description: "台本パス（channels/it-shikaku/ からの相対。空なら未投稿の次の台本）"
         required: false
         type: string
 
@@ -62,8 +62,8 @@ jobs:
           YT_IT_SHIKAKU_CLIENT_ID: ${{ secrets.YT_IT_SHIKAKU_CLIENT_ID }}
           YT_IT_SHIKAKU_CLIENT_SECRET: ${{ secrets.YT_IT_SHIKAKU_CLIENT_SECRET }}
           YT_IT_SHIKAKU_REFRESH_TOKEN: ${{ secrets.YT_IT_SHIKAKU_REFRESH_TOKEN }}
-          # schedule 起動時は inputs が空なので unlisted に倒す
-          YT_PRIVACY_STATUS: ${{ inputs.privacy_status || 'unlisted' }}
+          # schedule 起動時は inputs が空なので public に倒す（手動 dispatch は既定 unlisted）
+          YT_PRIVACY_STATUS: ${{ inputs.privacy_status || 'public' }}
           IT_SHIKAKU_SCRIPT: ${{ inputs.script }}
         run: python cli.py run it-shikaku
 
