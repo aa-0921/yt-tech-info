@@ -21,6 +21,9 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    # tiktok_publish が TikTok 用動画を tiktok-media ブランチへ push するため
+    permissions:
+      contents: write
     services:
       voicevox:
         image: voicevox/voicevox_engine:cpu-0.25.1
@@ -63,6 +66,7 @@ jobs:
           CHANNEL_ID: ${{ inputs.channel_id || 'github-trending' }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           YT_GITHUB_TRENDING_CLIENT_ID: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_ID }}
           YT_GITHUB_TRENDING_CLIENT_SECRET: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_SECRET }}
