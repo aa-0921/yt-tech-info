@@ -1,0 +1,46 @@
+name: Engage
+
+# github-trending の動画間導線とコメント返信を毎日 1 回まとめて行う。
+# - 再生上位の長尺の説明文に「最新の解説」ブロックを差し込む（冪等）
+# - オーナー未返信の視聴者コメントに LLM で返信（1 実行 最大 5 件 / LLM 1 リクエスト）
+# いいね自動化・他チャンネルへのコメントは YouTube の Fake Engagement ポリシーに触れるため行わない。
+on:
+  schedule:
+    - cron: "37 23 * * *"   # 毎日 23:37 UTC (08:37 JST / publish 10:07 とずらす / :00・:30 回避)
+  workflow_dispatch:
+
+jobs:
+  engage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout engine (private)
+        uses: actions/checkout@v4
+        with:
+          repository: aa-0921/youtube-auto-engine
+          token: ${{ secrets.ENGINE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run engagement batch
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YT_GITHUB_TRENDING_CLIENT_ID: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_ID }}
+          YT_GITHUB_TRENDING_CLIENT_SECRET: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_SECRET }}
+          YT_GITHUB_TRENDING_REFRESH_TOKEN: ${{ secrets.YT_GITHUB_TRENDING_REFRESH_TOKEN }}
+        run: python scripts/engage_batch.py --channel github-trending
+
+      - name: Persist engage state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add channels/github-trending/engage_state.json
+          # 他ファイルが modified になっても pull --rebase が失敗しないよう autostash
+          git diff --staged --quiet || (git commit -m "chore: update engage state" && git pull --rebase --autostash && git push)
