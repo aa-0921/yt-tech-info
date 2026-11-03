@@ -1,0 +1,72 @@
+name: Pin Reminder
+
+# github-trending の「伸びた長尺」のオーナーコメント固定を週1回リマインドする。
+# コメント固定は YouTube Data API に無く、自動化は規約（自動手段でのアクセス禁止）に触れるため手作業。
+# ここでは対象リストを Issue にして aa-0921 を assign / mention → GitHub の通知メールで知らせるだけ。
+# Issue を閉じるまで毎週「未完了」コメントで再通知する。
+on:
+  schedule:
+    - cron: "23 0 * * 1"   # 毎週月曜 00:23 UTC (09:23 JST / :00・:30 回避)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      # 自分の PAT で作った Issue は本人に通知されないため github-actions[bot] の token を使う
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout engine (private)
+        uses: actions/checkout@v4
+        with:
+          repository: aa-0921/youtube-auto-engine
+          token: ${{ secrets.ENGINE_REPO_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Build reminder
+        env:
+          YT_GITHUB_TRENDING_CLIENT_ID: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_ID }}
+          YT_GITHUB_TRENDING_CLIENT_SECRET: ${{ secrets.YT_GITHUB_TRENDING_CLIENT_SECRET }}
+          YT_GITHUB_TRENDING_REFRESH_TOKEN: ${{ secrets.YT_GITHUB_TRENDING_REFRESH_TOKEN }}
+        run: python scripts/pin_reminder.py --channel github-trending --out "$RUNNER_TEMP/body.md" --commit-state
+
+      - name: Re-notify open reminders
+        run: |
+          for n in $(gh issue list -R "$REPO" --label pin-reminder --state open --json number --jq '.[].number'); do
+            gh issue comment "$n" -R "$REPO" --body "@aa-0921 未完了の固定があります。済んだらこの Issue を閉じてください。"
+          done
+
+      - name: Create reminder issue
+        id: issue
+        run: |
+          if [ ! -s "$RUNNER_TEMP/body.md" ]; then
+            echo "対象なし"
+            exit 0
+          fi
+          count=$(grep -c '^- \[ \]' "$RUNNER_TEMP/body.md")
+          gh issue create -R "$REPO" --assignee aa-0921 --label pin-reminder \
+            --title "コメント固定 $(TZ=Asia/Tokyo date +%-m/%-d) 週（${count}本）" --body-file "$RUNNER_TEMP/body.md"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Persist pin state
+        # Issue を作れたときだけ記録する（失敗時は次週に同じ動画を再度リマインド）
+        if: steps.issue.outputs.created == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add channels/github-trending/pin_state.json
+          # 他ファイルが modified になっても pull --rebase が失敗しないよう autostash
+          git diff --staged --quiet || (git commit -m "chore: update pin reminder state" && git pull --rebase --autostash && git push)
