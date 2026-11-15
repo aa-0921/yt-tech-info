@@ -1,8 +1,6 @@
 name: Publish it-shikaku
 on:
-  # 毎日 drafts/ の未投稿台本を 1 本投稿する。尽きたら script_loader が StepError で失敗させる
-  schedule:
-    - cron: "0 12 * * *"  # 21:00 JST
+  # 長尺 TEST の準備中は schedule を外している（2026-11-15）。再開時に火・金の cron を入れる
   workflow_dispatch:
     inputs:
       privacy_status:
@@ -15,6 +13,11 @@ on:
         description: "台本パス（channels/it-shikaku/ からの相対。空なら未投稿の次の台本）"
         required: false
         type: string
+      dry_run:
+        description: "true なら publish せず、動画とサムネを artifact に残す（検証用）"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   publish:
@@ -69,9 +72,23 @@ jobs:
           # 長尺レンダ用: 上限 150 分・runner の 4 vCPU を使い切る
           REMOTION_RENDER_TIMEOUT_SEC: "9000"
           REMOTION_CONCURRENCY: "4"
-        run: python cli.py run it-shikaku
+        run: python cli.py run it-shikaku ${{ inputs.dry_run && '--dry-run' || '' }}
+
+      - name: Upload dry-run outputs
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dryrun-it-shikaku-${{ github.run_id }}
+          path: |
+            /tmp/yt-auto-it-shikaku-*/output.mp4
+            /tmp/yt-auto-it-shikaku-*/shorts_output.mp4
+            /tmp/yt-auto-it-shikaku-*/thumb.png
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Persist history
+        # dry-run は history を予約するだけで投稿しないので書き戻さない
+        if: ${{ !inputs.dry_run }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
