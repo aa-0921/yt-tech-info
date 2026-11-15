@@ -63,9 +63,10 @@ jobs:
 
       - name: Run pipeline
         env:
-          YT_IT_SHIKAKU_CLIENT_ID: ${{ secrets.YT_IT_SHIKAKU_CLIENT_ID }}
-          YT_IT_SHIKAKU_CLIENT_SECRET: ${{ secrets.YT_IT_SHIKAKU_CLIENT_SECRET }}
-          YT_IT_SHIKAKU_REFRESH_TOKEN: ${{ secrets.YT_IT_SHIKAKU_REFRESH_TOKEN }}
+          # 投稿先は電話確認済みの「なんでも全部しらべ帳」(UC8ySgafYxHmwCutIKWxaEYw)。env 名は engine の credentials_prefix に合わせて据え置き（2026-11-15）
+          YT_IT_SHIKAKU_CLIENT_ID: ${{ secrets.YT_SHIRABE_CLIENT_ID }}
+          YT_IT_SHIKAKU_CLIENT_SECRET: ${{ secrets.YT_SHIRABE_CLIENT_SECRET }}
+          YT_IT_SHIKAKU_REFRESH_TOKEN: ${{ secrets.YT_SHIRABE_REFRESH_TOKEN }}
           # schedule 起動時は inputs が空なので public に倒す（手動 dispatch は既定 unlisted）
           YT_PRIVACY_STATUS: ${{ inputs.privacy_status || 'public' }}
           IT_SHIKAKU_SCRIPT: ${{ inputs.script }}
