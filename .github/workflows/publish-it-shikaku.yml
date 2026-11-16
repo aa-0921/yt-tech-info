@@ -1,6 +1,9 @@
 name: Publish it-shikaku
 on:
-  # 長尺 TEST の準備中は schedule を外している（2026-11-15）。再開時に火・金の cron を入れる
+  # 長尺 TEST: 火・金 06:47 JST（月・木 21:47 UTC）。cron は数時間遅れるため前倒しし、
+  # 公開は engine 側の publishAt（19:00 JST）でそろえる（2026-11-16）
+  schedule:
+    - cron: "47 21 * * 1,4"
   workflow_dispatch:
     inputs:
       privacy_status:
@@ -67,13 +70,17 @@ jobs:
           YT_IT_SHIKAKU_CLIENT_ID: ${{ secrets.YT_SHIRABE_CLIENT_ID }}
           YT_IT_SHIKAKU_CLIENT_SECRET: ${{ secrets.YT_SHIRABE_CLIENT_SECRET }}
           YT_IT_SHIKAKU_REFRESH_TOKEN: ${{ secrets.YT_SHIRABE_REFRESH_TOKEN }}
-          # schedule 起動時は inputs が空なので public に倒す（手動 dispatch は既定 unlisted）
-          YT_PRIVACY_STATUS: ${{ inputs.privacy_status || 'public' }}
+          # 手動 dispatch の公開設定。schedule 起動時は空 → run で YT_PRIVACY_STATUS を設定しない
+          PRIVACY_INPUT: ${{ inputs.privacy_status }}
           IT_SHIKAKU_SCRIPT: ${{ inputs.script }}
           # 長尺レンダ用: 上限 150 分・runner の 4 vCPU を使い切る
           REMOTION_RENDER_TIMEOUT_SEC: "9000"
           REMOTION_CONCURRENCY: "4"
-        run: python cli.py run it-shikaku ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: |
+          # YT_PRIVACY_STATUS があると engine は publishAt 予約をしない（publisher/youtube.py）。
+          # schedule 起動時は設定せず、channel.yaml の publish_time で private 予約 → 19:00 公開にする
+          if [ -n "$PRIVACY_INPUT" ]; then export YT_PRIVACY_STATUS="$PRIVACY_INPUT"; fi
+          python cli.py run it-shikaku ${{ inputs.dry_run && '--dry-run' || '' }}
 
       - name: Upload dry-run outputs
         if: ${{ inputs.dry_run }}
