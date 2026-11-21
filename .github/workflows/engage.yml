@@ -4,6 +4,7 @@ name: Engage
 # - 再生上位の長尺の説明文に「最新の解説」ブロックを差し込む（冪等）
 # - オーナー未返信の視聴者コメントに LLM で返信（1 実行 最大 5 件 / LLM 1 リクエスト）
 # いいね自動化・他チャンネルへのコメントは YouTube の Fake Engagement ポリシーに触れるため行わない。
+# it-shikaku（なんでも全部しらべ帳）は、予約公開で投稿時に 403 になるオーナーコメントの補完だけ行う（公開 3 日以内の長尺のみ）。
 on:
   schedule:
     - cron: "37 23 * * *"   # 毎日 23:37 UTC (08:37 JST / publish 10:07 とずらす / :00・:30 回避)
@@ -44,3 +45,13 @@ jobs:
           git add channels/github-trending/engage_state.json
           # 他ファイルが modified になっても pull --rebase が失敗しないよう autostash
           git diff --staged --quiet || (git commit -m "chore: update engage state" && git pull --rebase --autostash && git push)
+
+      # github-trending の state 保存の後に置き、こちらが失敗しても上の処理に影響させない
+      - name: Owner comment for it-shikaku
+        if: ${{ !cancelled() }}
+        env:
+          # 投稿先は「なんでも全部しらべ帳」。env 名は engine の credentials_prefix（YT_IT_SHIKAKU）に合わせる
+          YT_IT_SHIKAKU_CLIENT_ID: ${{ secrets.YT_SHIRABE_CLIENT_ID }}
+          YT_IT_SHIKAKU_CLIENT_SECRET: ${{ secrets.YT_SHIRABE_CLIENT_SECRET }}
+          YT_IT_SHIKAKU_REFRESH_TOKEN: ${{ secrets.YT_SHIRABE_REFRESH_TOKEN }}
+        run: python scripts/engage_batch.py --channel it-shikaku --skip-refresh --skip-reply
